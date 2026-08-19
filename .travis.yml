@@ -13,7 +13,8 @@ cache:
   directories:
     - node_modules
 install:
-  - npm install -g istanbul
-  - npm install -g mocha
+  - npm install -g pnpm
+  - pnpm install -g istanbul mocha
+  - pnpm install
 after_success:
   - codeclimate-test-reporter < coverage/lcov.info
