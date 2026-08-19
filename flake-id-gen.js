@@ -1,124 +1,96 @@
 /**
  * Flake ID generator yields k-ordered, conflict-free ids in a distributed environment.
  */
-(function () {
-    "use strict";
+class FlakeId {
+  /**
+   * Represents an ID generator.
+   * @param {object} [options] - Generator options
+   * @param {number} [options.id] - Generator identifier (0 to 1023). Provided instead of datacenter and worker.
+   * @param {number} [options.datacenter] - Datacenter identifier (0 to 31).
+   * @param {number} [options.worker] - Worker identifier (0 to 31).
+   * @param {number} [options.epoch] - Number used to reduce value of generated timestamp.
+   * @param {number} [options.seqMask] - Mask for sequence numbers (default: 0xFFF = 4095).
+   */
+  constructor(options = {}) {
+    this.options = options;
 
-    /**
-     * Represents an ID generator.
-     * @exports FlakeId
-     * @constructor
-     * @param {object=} options - Generator options
-     * @param {Number} options.id - Generator identifier. It can have values from 0 to 1023. It can be provided instead of <tt>datacenter</tt> and <tt>worker</tt> identifiers.
-     * @param {Number} options.datacenter - Datacenter identifier. It can have values from 0 to 31.
-     * @param {Number} options.worker - Worker identifier. It can have values from 0 to 31.
-     * @param {Number} options.epoch - Number used to reduce value of a generated timestamp.
-     * @param {Number} options.seqMask
-     */
-    var FlakeId = module.exports = function (options) {
-        this.options = options || {};
-
-        // Set generator id from 'id' option or combination of 'datacenter' and 'worker'
-        if (typeof this.options.id !== 'undefined') {
-            /*jslint bitwise: true */
-            this.id = this.options.id & 0x3FF;
-        } else {
-            this.datacenter = (this.options.datacenter || 0) & 0x1F;
-            this.worker = (this.options.worker || 0) & 0x1F;
-            this.id = (this.datacenter) << 5 | this.worker;
-        }
-        this.genId = this.id;
-        this.genId <<= 12;  // id generator identifier - will not change while generating ids
-        this.epoch = +this.options.epoch || 0;
-        this.seq = 0;
-        this.lastTime = 0;
-        this.overflow = false;
-        this.seqMask = this.options.seqMask || 0xFFF;
-    };
-
-    FlakeId.POW10 = Math.pow(2, 10); // 2 ^ 10
-    FlakeId.POW26 = Math.pow(2, 26); // 2 ^ 26
-
-    FlakeId.prototype = {
-      /**
-       * Generates conflice-free id
-       * @param {cb=} callback The callback that handles the response.
-       * @returns {Buffer} Generated id if callback is not provided
-       * @exception if a sequence exceeded its maximum value and a callback function is not provided
-       */
-        next: function (cb) {
-          /**
-           * This callback receives generated id
-           * @callback callback
-           * @param {Error} error - Error occurred during id generation
-           * @param {Buffer} id - Generated id
-           */
-
-            var id;
-            if (Buffer.alloc) {
-                id = Buffer.alloc(8);
-            } else {
-                id = new Buffer(8);
-                id.fill(0);
-            }
-            var time = Date.now() - this.epoch;
-
-            // Generates id in the same millisecond as the previous id
-            if (time < this.lastTime) {
-                if (cb) {
-                    setTimeout(self.next.bind(self, cb), this.lastTime - time);
-                    return;
-                }
-                throw new Error(`Clock moved backwards. Refusing to generate id for ${this.lastTime - time} milliseconds`);
-            }
-            if (time === this.lastTime) {
-
-                // If all sequence values (4096 unique values including 0) have been used
-                // to generate ids in the current millisecond (overflow is true) wait till next millisecond
-                if (this.overflow) {
-                    overflowCond(this, cb);
-                    return;
-                }
-
-                // Increase sequence counter
-                /*jslint bitwise: true */
-                this.seq = (this.seq + 1) & this.seqMask;
-
-                // sequence counter exceeded its max value (4095)
-                // - set overflow flag and wait till next millisecond
-                if (this.seq === 0) {
-                    this.overflow = true;
-                    overflowCond(this, cb);
-                    return;
-                }
-            } else {
-                this.overflow = false;
-                this.seq = 0;
-            }
-            this.lastTime = time;
-
-            id.writeUInt32BE(((time & 0x3) << 22) | this.genId | this.seq, 4);
-            id.writeUInt8(Math.floor(time / 4) & 0xFF, 4);
-            id.writeUInt16BE(Math.floor(time / FlakeId.POW10) & 0xFFFF, 2);
-            id.writeUInt16BE(Math.floor(time / FlakeId.POW26) & 0xFFFF, 0);
-
-            if (cb) {
-                process.nextTick(cb.bind(null, null, id));
-            }
-            else {
-                return id;
-            }
-        }
-    };
-
-  function overflowCond(self, cb) {
-    if (cb) {
-        setTimeout(self.next.bind(self, cb), 1);
+    if (typeof options.id !== 'undefined') {
+      this.id = options.id & 0x3ff;
+    } else {
+      this.datacenter = (options.datacenter || 0) & 0x1f;
+      this.worker = (options.worker || 0) & 0x1f;
+      this.id = (this.datacenter << 5) | this.worker;
     }
-    else {
-        throw new Error('Sequence exceeded its maximum value. Provide callback function to handle sequence overflow');
-    }
+
+    this.genId = BigInt((this.id & 0x3ff) << 12);
+    this.epoch = BigInt(+options.epoch || 0);
+    this.seq = 0;
+    this.lastTime = 0n;
+    this.overflow = false;
+    this.seqMask = options.seqMask || 0xfff;
   }
 
+  /**
+   * Generates conflict-free id.
+   * @param {Function} [cb] - Optional callback function (err, id)
+   * @returns {Buffer|void} Generated Buffer id if no callback provided
+   */
+  next(cb) {
+    const time = BigInt(Date.now()) - this.epoch;
 
-}());
+    // Clock moved backwards
+    if (time < this.lastTime) {
+      const waitMs = Number(this.lastTime - time);
+      if (cb) {
+        setTimeout(() => this.next(cb), waitMs);
+        return;
+      }
+      throw new Error(
+        `Clock moved backwards. Refusing to generate id for ${waitMs} milliseconds`,
+      );
+    }
+
+    if (time === this.lastTime) {
+      if (this.overflow) {
+        return this._handleOverflow(cb);
+      }
+
+      this.seq = (this.seq + 1) & this.seqMask;
+      if (this.seq === 0) {
+        this.overflow = true;
+        return this._handleOverflow(cb);
+      }
+    } else {
+      this.overflow = false;
+      this.seq = 0;
+    }
+
+    this.lastTime = time;
+
+    // 64-bit ID: 42 bits timestamp | 10 bits generator id (datacenter + worker) | 12 bits sequence
+    const flakeId = (time << 22n) | this.genId | BigInt(this.seq);
+    const id = Buffer.alloc(8);
+    id.writeBigUInt64BE(flakeId, 0);
+
+    if (cb) {
+      process.nextTick(() => cb(null, id));
+      return;
+    }
+    return id;
+  }
+
+  /**
+   * @private
+   */
+  _handleOverflow(cb) {
+    if (cb) {
+      setTimeout(() => this.next(cb), 1);
+      return;
+    }
+    throw new Error(
+      'Sequence exceeded its maximum value. Provide callback function to handle sequence overflow',
+    );
+  }
+}
+
+module.exports = FlakeId;

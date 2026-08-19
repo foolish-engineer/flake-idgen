@@ -4,7 +4,10 @@
   "description": "Flake ID generator yields k-ordered, conflict-free ids in a distributed environment",
   "main": "flake-id-gen.js",
   "scripts": {
-    "test": "vitest run --coverage"
+    "test": "vitest run --coverage",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check --write ."
   },
   "engines": {
     "node": ">=26.0.0"
@@ -37,6 +40,7 @@
     "url": "https://github.com/T-PWK/flake-idgen/issues"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.9",
     "@vitest/coverage-v8": "^4.1.11",
     "vitest": "^4.1.11"
   }
