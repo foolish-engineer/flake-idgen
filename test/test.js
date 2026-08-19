@@ -12,7 +12,6 @@ describe('FlakeId', function () {
     })
 
     it('should return unique ids when callback is present', function () {
-      this.slow(200)
       testWithCallback(idGen, 5000)
     })
   })
@@ -44,7 +43,6 @@ describe('FlakeId({id:0x100})', function () {
       testSynch(idGen, 1000)
     })
     it('should return unique ids when callback is present', function () {
-      this.slow(200)
       testWithCallback(idGen, 5000)
     })
   })
@@ -78,7 +76,6 @@ describe('FlakeId({seqMask:0x0F})', function () {
     })
 
     it('should return unique ids when callback is present', function () {
-      this.slow(200)
       testWithCallback(idGen, 1000)
     })
 
