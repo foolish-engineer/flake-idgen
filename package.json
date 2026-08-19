@@ -6,6 +6,9 @@
   "scripts": {
     "test": "nyc mocha"
   },
+  "engines": {
+    "node": ">=26.0.0"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/T-PWK/flake-idgen.git"
